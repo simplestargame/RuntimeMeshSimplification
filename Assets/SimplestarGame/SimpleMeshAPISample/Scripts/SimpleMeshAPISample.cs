@@ -24,7 +24,7 @@ namespace SimplestarGame
             return meshSimplifier;
         }
 
-        static void MakeCustomLayoutMeshJob(CustomLayoutMesh customLayoutMesh, MeshSimplifier simplifier, int meshIdx)
+        void MakeCustomLayoutMeshJob(Mesh.MeshDataArray meshDataArray, CustomLayoutMesh customLayoutMesh, MeshSimplifier simplifier, int meshIdx)
         {
             int subMeshCount = simplifier.SubMeshCount;
             int[][] subMeshTrianglesArray = new int[subMeshCount][];
@@ -32,7 +32,7 @@ namespace SimplestarGame
             {
                 subMeshTrianglesArray[subIdx] = simplifier.GetSubMeshTriangles(subIdx);
             }
-            customLayoutMesh.SetMeshData(meshIdx, subMeshCount, subMeshTrianglesArray,
+            customLayoutMesh.SetMeshData(meshDataArray, meshIdx, subMeshCount, subMeshTrianglesArray,
                 simplifier.Vertices, simplifier.Normals, simplifier.Tangents, simplifier.Colors, simplifier.UV1);
         }
 
@@ -135,7 +135,7 @@ namespace SimplestarGame
                 }
             }
             customLayoutMesh.Allocate(simplifyTasks.Length);
-            Task<CustomLayoutMesh>[] createJobTasks = new Task<CustomLayoutMesh>[simplifyTasks.Length];
+            Task[] createJobTasks = new Task[simplifyTasks.Length];
             for (int meshIdx = 0; meshIdx < simplifyTasks.Length; ++meshIdx)
             {
                 if (this.HasTimeElapsed())
@@ -143,7 +143,22 @@ namespace SimplestarGame
                     this.RestStartTime();
                     yield return null;
                 }
-                MakeCustomLayoutMeshJob(customLayoutMesh, simplifyTasks[meshIdx].Result, meshIdx);
+                var newMeshDataArray = Mesh.AllocateWritableMeshData(1);
+                var meshSimplifier = simplifyTasks[meshIdx].Result;
+                var newMeshIndex = meshIdx;
+                createJobTasks[meshIdx] = Task.Run(() => MakeCustomLayoutMeshJob(newMeshDataArray, customLayoutMesh, meshSimplifier, newMeshIndex));
+            }
+            lastCompletedTaskIndex = 0;
+            while (lastCompletedTaskIndex < createJobTasks.Length)
+            {
+                if (!createJobTasks[lastCompletedTaskIndex].IsCompleted)
+                {
+                    yield return null;
+                }
+                else
+                {
+                    lastCompletedTaskIndex++;
+                }
             }
             combinedHandle = customLayoutMesh.Schedule();
             if (!combinedHandle.IsCompleted)

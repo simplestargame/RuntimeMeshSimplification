@@ -50,7 +50,7 @@ namespace SimplestarGame
                 subMeshTrianglesArray[subMeshIdx] = mesh.GetIndices(subMeshIdx);
                 indexCount += subMeshTrianglesArray[subMeshIdx].Length;
             }
-            this.copyMeshJobs[meshIdx] = this.MakeCopyJob(meshIdx, subMeshCount, mesh.vertices.Length, indexCount, new MeshSource
+            this.copyMeshJobs[meshIdx] = this.MakeCopyJob(Mesh.AllocateWritableMeshData(1), meshIdx, subMeshCount, mesh.vertices.Length, indexCount, new MeshSource
             {
                 subMeshTrianglesArray = subMeshTrianglesArray,
                 vertices = mesh.vertices,
@@ -61,14 +61,15 @@ namespace SimplestarGame
             });
         }
 
-        public void SetMeshData(int meshIdx, int subMeshCount, int[][] subMeshTrianglesArray, Vector3[] vertices, Vector3[] normals, Vector4[] tangents, Color[] colors, Vector2[] uv)
+        public void SetMeshData(Mesh.MeshDataArray meshDataArray, int meshIdx, int subMeshCount, 
+            int[][] subMeshTrianglesArray, Vector3[] vertices, Vector3[] normals, Vector4[] tangents, Color[] colors, Vector2[] uv)
         {
             int indexCount = 0;
             for (int subMeshIdx = 0; subMeshIdx < subMeshCount; subMeshIdx++)
             {
                 indexCount += subMeshTrianglesArray[subMeshIdx].Length;
             }
-            this.copyMeshJobs[meshIdx] = this.MakeCopyJob(meshIdx, subMeshCount, vertices.Length, indexCount, new MeshSource
+            this.copyMeshJobs[meshIdx] = this.MakeCopyJob(meshDataArray, meshIdx, subMeshCount, vertices.Length, indexCount, new MeshSource
             {
                 subMeshTrianglesArray = subMeshTrianglesArray,
                 vertices = vertices,
@@ -156,9 +157,9 @@ namespace SimplestarGame
             this.disposed = true;
         }
 
-        CopyMeshJob MakeCopyJob(int meshIdx, int subMeshCount, int vertexCount, int indexCount, MeshSource meshSource)
+        CopyMeshJob MakeCopyJob(Mesh.MeshDataArray meshDataArray, int meshIdx, int subMeshCount, int vertexCount, int indexCount, MeshSource meshSource)
         {
-            this.nativeMeshDataArrayArray[meshIdx] = Mesh.AllocateWritableMeshData(1);
+            this.nativeMeshDataArrayArray[meshIdx] = meshDataArray;
             Mesh.MeshData meshData = this.nativeMeshDataArrayArray[meshIdx][0];
             meshData.subMeshCount = subMeshCount;
             meshData.SetVertexBufferParams(vertexCount,

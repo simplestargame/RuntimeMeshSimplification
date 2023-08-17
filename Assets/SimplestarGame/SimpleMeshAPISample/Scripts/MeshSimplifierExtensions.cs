@@ -69,7 +69,8 @@ namespace UnityMeshSimplifier
             {
                 subMeshTrianglesArray[subIdx] = meshSimplifier.GetSubMeshTriangles(subIdx);
             }
-            customLayoutMesh.SetMeshData(0, subMeshCount, subMeshTrianglesArray, meshSimplifier.Vertices, meshSimplifier.Normals, meshSimplifier.Tangents, meshSimplifier.Colors, meshSimplifier.UV1);
+            customLayoutMesh.SetMeshData(Mesh.AllocateWritableMeshData(1), 0, subMeshCount, 
+                subMeshTrianglesArray, meshSimplifier.Vertices, meshSimplifier.Normals, meshSimplifier.Tangents, meshSimplifier.Colors, meshSimplifier.UV1);
             customLayoutMesh.Schedule().Complete();
             var mesh = customLayoutMesh.ToMesh(0);
             customLayoutMesh.Dispose();

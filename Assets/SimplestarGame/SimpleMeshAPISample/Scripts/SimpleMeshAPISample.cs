@@ -11,8 +11,10 @@ namespace SimplestarGame
 {
     public class SimpleMeshAPISample : MonoBehaviour
     {
-        [SerializeField] Transform copyTarget;
-        [SerializeField] float quality = 1f;
+        [SerializeField] Transform referenceTarget;
+        [SerializeField] Vector3 offsetPosition;
+        [SerializeField, Range(0, 1)] float quality = 1f;
+        [SerializeField] bool recalculateNormals = true;
 
         float startTime;
         float duration = 0.016f;
@@ -63,17 +65,10 @@ namespace SimplestarGame
         {
             this.startTime = Time.realtimeSinceStartup;
         }
-        void Update()
+
+        IEnumerator Start()
         {
-            if (Input.GetKeyDown(KeyCode.Space))
-            {
-                this.RestStartTime();
-                var targetMeshes = this.copyTarget.GetComponentsInChildren<MeshFilter>(true);
-                StartCoroutine(CoCopyMesh(targetMeshes));
-            }
-        }
-        IEnumerator CoCopyMesh(MeshFilter[] meshFilters)
-        {
+            MeshFilter[] meshFilters = this.referenceTarget.GetComponentsInChildren<MeshFilter>(true);
             if (this.HasTimeElapsed())
             {
                 this.RestStartTime();
@@ -202,8 +197,13 @@ namespace SimplestarGame
                 var newMesh = newMeshes[i];
                 var sourceMeshFilter = meshFilters[i];
                 GameObject newGameObject = new GameObject("ClonedMeshObject");
-                newGameObject.transform.position = sourceMeshFilter.transform.position;
+                newGameObject.transform.position = sourceMeshFilter.transform.position + this.offsetPosition;
                 newGameObject.transform.rotation = sourceMeshFilter.transform.rotation;
+                if (this.recalculateNormals)
+                {
+                    newMesh.RecalculateNormals();
+                    newMesh.RecalculateTangents();
+                }
                 newGameObject.AddComponent<MeshFilter>().sharedMesh = newMesh;
                 newGameObject.AddComponent<MeshRenderer>().sharedMaterials = sourceMeshFilter.GetComponent<MeshRenderer>().sharedMaterials;
                 newGameObject.AddComponent<MeshCollider>().sharedMesh = newMesh;

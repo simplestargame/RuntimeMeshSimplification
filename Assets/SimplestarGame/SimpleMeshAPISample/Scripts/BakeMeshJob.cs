@@ -3,7 +3,7 @@ using Unity.Collections;
 using Unity.Jobs;
 using UnityEngine;
 
-namespace SimplestarGame
+namespace RuntimeMeshSimplification
 {
     [BurstCompile]
     public struct BakeMeshJob : IJobParallelFor
@@ -14,6 +14,7 @@ namespace SimplestarGame
         {
             this.meshIds = meshIds;
         }
+
         public void Execute(int index)
         {
             Physics.BakeMesh(meshIds[index], false);

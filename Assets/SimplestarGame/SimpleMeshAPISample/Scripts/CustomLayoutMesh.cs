@@ -6,7 +6,7 @@ using Unity.Mathematics;
 using UnityEngine;
 using UnityEngine.Rendering;
 
-namespace SimplestarGame
+namespace RuntimeMeshSimplification
 {
     public struct NativeMeshSource
     {
@@ -33,11 +33,11 @@ namespace SimplestarGame
     {
         public CustomLayoutMesh(int meshCount)
         {
-            this.Allocate(meshCount);
+            Allocate(meshCount);
         }
         ~CustomLayoutMesh()
         {
-            this.Dispose();
+            Dispose();
         }
 
         public void SetMeshData(int meshIdx, Mesh mesh)
@@ -50,7 +50,7 @@ namespace SimplestarGame
                 subMeshTrianglesArray[subMeshIdx] = mesh.GetIndices(subMeshIdx);
                 indexCount += subMeshTrianglesArray[subMeshIdx].Length;
             }
-            this.copyMeshJobs[meshIdx] = this.MakeCopyJob(Mesh.AllocateWritableMeshData(1), meshIdx, subMeshCount, mesh.vertices.Length, indexCount, new MeshSource
+            copyMeshJobs[meshIdx] = MakeCopyJob(Mesh.AllocateWritableMeshData(1), meshIdx, subMeshCount, mesh.vertices.Length, indexCount, new MeshSource
             {
                 subMeshTrianglesArray = subMeshTrianglesArray,
                 vertices = mesh.vertices,
@@ -61,7 +61,7 @@ namespace SimplestarGame
             });
         }
 
-        public void SetMeshData(Mesh.MeshDataArray meshDataArray, int meshIdx, int subMeshCount, 
+        public void SetMeshData(Mesh.MeshDataArray meshDataArray, int meshIdx, int subMeshCount,
             int[][] subMeshTrianglesArray, Vector3[] vertices, Vector3[] normals, Vector4[] tangents, Color[] colors, Vector2[] uv)
         {
             int indexCount = 0;
@@ -69,7 +69,7 @@ namespace SimplestarGame
             {
                 indexCount += subMeshTrianglesArray[subMeshIdx].Length;
             }
-            this.copyMeshJobs[meshIdx] = this.MakeCopyJob(meshDataArray, meshIdx, subMeshCount, vertices.Length, indexCount, new MeshSource
+            copyMeshJobs[meshIdx] = MakeCopyJob(meshDataArray, meshIdx, subMeshCount, vertices.Length, indexCount, new MeshSource
             {
                 subMeshTrianglesArray = subMeshTrianglesArray,
                 vertices = vertices,
@@ -82,25 +82,23 @@ namespace SimplestarGame
 
         public JobHandle Schedule()
         {
-            this.copyMeshJobHandles = new NativeArray<JobHandle>(this.copyMeshJobs.Length, Allocator.Persistent);
-            for (int meshIdx = 0; meshIdx < this.copyMeshJobs.Length; ++meshIdx)
-            {
+            copyMeshJobHandles = new NativeArray<JobHandle>(copyMeshJobs.Length, Allocator.Persistent);
+            for (int meshIdx = 0; meshIdx < copyMeshJobs.Length; ++meshIdx)
                 copyMeshJobHandles[meshIdx] = copyMeshJobs[meshIdx].Schedule();
-            }
             return JobHandle.CombineDependencies(copyMeshJobHandles);
         }
 
         public Mesh ToMesh(int meshIdx)
         {
-            var nativeMeshSource = this.nativeMeshSources[meshIdx];
+            var nativeMeshSource = nativeMeshSources[meshIdx];
             var subMeshCount = nativeMeshSource.subIndicesOffsets.Length;
-            var meshBounds = this.nativeMeshBounds[meshIdx];
+            var meshBounds = nativeMeshBounds[meshIdx];
             var newMesh = new Mesh();
             newMesh.name = "CustomLayoutMesh" + meshIdx;
             newMesh.bounds = new Bounds((meshBounds[subMeshCount].c0 + meshBounds[subMeshCount].c1) * 0.5f, meshBounds[subMeshCount].c1 - meshBounds[subMeshCount].c0);
             for (int subMeshIdx = 0; subMeshIdx < subMeshCount; subMeshIdx++)
             {
-                var meshData = this.nativeMeshDataArrayArray[meshIdx][0];
+                var meshData = nativeMeshDataArrayArray[meshIdx][0];
                 var subMeshDesc = meshData.GetSubMesh(subMeshIdx);
                 meshData.SetSubMesh(subMeshIdx, new SubMeshDescriptor
                 {
@@ -113,54 +111,54 @@ namespace SimplestarGame
                     bounds = new Bounds((meshBounds[subMeshIdx].c0 + meshBounds[subMeshIdx].c1) * 0.5f, meshBounds[subMeshIdx].c1 - meshBounds[subMeshIdx].c0)
                 }, MeshUpdateFlags.DontRecalculateBounds | MeshUpdateFlags.DontValidateIndices | MeshUpdateFlags.DontNotifyMeshUsers);
             }
-            Mesh.ApplyAndDisposeWritableMeshData(this.nativeMeshDataArrayArray[meshIdx], new[] { newMesh }, MeshUpdateFlags.DontRecalculateBounds | MeshUpdateFlags.DontValidateIndices | MeshUpdateFlags.DontNotifyMeshUsers);
+            Mesh.ApplyAndDisposeWritableMeshData(nativeMeshDataArrayArray[meshIdx], new[] { newMesh }, MeshUpdateFlags.DontRecalculateBounds | MeshUpdateFlags.DontValidateIndices | MeshUpdateFlags.DontNotifyMeshUsers);
             return newMesh;
         }
 
         public Mesh.MeshData GetMeshData(int meshIdx)
         {
-            var meshData = this.nativeMeshDataArrayArray[meshIdx][0];
+            var meshData = nativeMeshDataArrayArray[meshIdx][0];
             return meshData;
         }
 
         public void Allocate(int meshCount)
         {
-            this.Dispose();
-            this.nativeMeshDataArrayArray = new NativeArray<Mesh.MeshDataArray>(meshCount, Allocator.Persistent);
-            this.nativeMeshSources = new NativeArray<NativeMeshSource>(meshCount, Allocator.Persistent);
-            this.nativeMeshBounds = new NativeArray<NativeArray<float3x2>>(meshCount, Allocator.Persistent);
-            this.copyMeshJobs = new CopyMeshJob[meshCount];
-            this.disposed = false;
+            Dispose();
+            nativeMeshDataArrayArray = new NativeArray<Mesh.MeshDataArray>(meshCount, Allocator.Persistent);
+            nativeMeshSources = new NativeArray<NativeMeshSource>(meshCount, Allocator.Persistent);
+            nativeMeshBounds = new NativeArray<NativeArray<float3x2>>(meshCount, Allocator.Persistent);
+            copyMeshJobs = new CopyMeshJob[meshCount];
+            disposed = false;
         }
 
         public void Dispose()
         {
-            if(this.disposed) return;
-            this.copyMeshJobHandles.Dispose();
-            for (int meshIdx = 0; meshIdx < this.nativeMeshBounds.Length; meshIdx++)
+            if (disposed) return;
+
+            copyMeshJobHandles.Dispose();
+            for (int meshIdx = 0; meshIdx < nativeMeshBounds.Length; meshIdx++)
+                nativeMeshBounds[meshIdx].Dispose();
+            nativeMeshBounds.Dispose();
+            for (int meshIdx = 0; meshIdx < nativeMeshSources.Length; meshIdx++)
             {
-                this.nativeMeshBounds[meshIdx].Dispose();
+                nativeMeshSources[meshIdx].indices.Dispose();
+                nativeMeshSources[meshIdx].subIndicesOffsets.Dispose();
+                nativeMeshSources[meshIdx].vertices.Dispose();
+                nativeMeshSources[meshIdx].normals.Dispose();
+                nativeMeshSources[meshIdx].tangents.Dispose();
+                nativeMeshSources[meshIdx].colors.Dispose();
+                nativeMeshSources[meshIdx].uv.Dispose();
             }
-            this.nativeMeshBounds.Dispose();
-            for (int meshIdx = 0; meshIdx < this.nativeMeshSources.Length; meshIdx++)
-            {
-                this.nativeMeshSources[meshIdx].indices.Dispose();
-                this.nativeMeshSources[meshIdx].subIndicesOffsets.Dispose();
-                this.nativeMeshSources[meshIdx].vertices.Dispose();
-                this.nativeMeshSources[meshIdx].normals.Dispose();
-                this.nativeMeshSources[meshIdx].tangents.Dispose();
-                this.nativeMeshSources[meshIdx].colors.Dispose();
-                this.nativeMeshSources[meshIdx].uv.Dispose();
-            }
-            this.nativeMeshSources.Dispose();
-            this.nativeMeshDataArrayArray.Dispose();
-            this.disposed = true;
+            nativeMeshSources.Dispose();
+            nativeMeshDataArrayArray.Dispose();
+            disposed = true;
         }
 
         CopyMeshJob MakeCopyJob(Mesh.MeshDataArray meshDataArray, int meshIdx, int subMeshCount, int vertexCount, int indexCount, MeshSource meshSource)
         {
-            this.nativeMeshDataArrayArray[meshIdx] = meshDataArray;
-            Mesh.MeshData meshData = this.nativeMeshDataArrayArray[meshIdx][0];
+            nativeMeshDataArrayArray[meshIdx] = meshDataArray;
+
+            Mesh.MeshData meshData = nativeMeshDataArrayArray[meshIdx][0];
             meshData.subMeshCount = subMeshCount;
             meshData.SetVertexBufferParams(vertexCount,
                new VertexAttributeDescriptor(VertexAttribute.Position, VertexAttributeFormat.Float16, 4, stream: 0),
@@ -168,6 +166,7 @@ namespace SimplestarGame
                new VertexAttributeDescriptor(VertexAttribute.Tangent, VertexAttributeFormat.SNorm8, 4, stream: 0),
                new VertexAttributeDescriptor(VertexAttribute.Color, VertexAttributeFormat.UNorm8, 4, stream: 0),
                new VertexAttributeDescriptor(VertexAttribute.TexCoord0, VertexAttributeFormat.Float16, 2, stream: 0));
+
             var vertexData = meshData.GetVertexData<CustomVertexLayout>(stream: 0);
             meshData.SetIndexBufferParams(indexCount, IndexFormat.UInt32);
             var indexData = meshData.GetIndexData<int>();
@@ -180,12 +179,10 @@ namespace SimplestarGame
                 var subIndices = meshSource.subMeshTrianglesArray[subMeshIdx];
                 int subIndexCount = subIndices.Length;
                 for (int idx = 0; idx < subIndexCount; idx++)
-                {
                     nativeIndices[idx + indexOffset] = subIndices[idx];
-                }
                 indexOffset += subIndexCount;
                 nativeSubIndicesOffsets[subMeshIdx] = indexOffset;
-                
+
                 var subMeshDesc = new SubMeshDescriptor
                 {
                     topology = MeshTopology.Triangles,
@@ -199,32 +196,28 @@ namespace SimplestarGame
                 indexStart = indexOffset;
                 meshData.SetSubMesh(subMeshIdx, subMeshDesc, MeshUpdateFlags.DontRecalculateBounds | MeshUpdateFlags.DontValidateIndices | MeshUpdateFlags.DontNotifyMeshUsers);
             }
+
             NativeArray<float3> nativeVertices = new NativeArray<float3>(meshSource.vertices.Length, Allocator.Persistent);
             for (int vIdx = 0; vIdx < meshSource.vertices.Length; vIdx++)
-            {
                 nativeVertices[vIdx] = new float3(meshSource.vertices[vIdx].x, meshSource.vertices[vIdx].y, meshSource.vertices[vIdx].z);
-            }
+
             NativeArray<float3> nativeNormals = new NativeArray<float3>(meshSource.normals.Length, Allocator.Persistent);
             for (int vIdx = 0; vIdx < meshSource.normals.Length; vIdx++)
-            {
                 nativeNormals[vIdx] = new float3(meshSource.normals[vIdx].x, meshSource.normals[vIdx].y, meshSource.normals[vIdx].z);
-            }
+
             NativeArray<float4> nativeTangents = new NativeArray<float4>(meshSource.tangents.Length, Allocator.Persistent);
             for (int vIdx = 0; vIdx < meshSource.tangents.Length; vIdx++)
-            {
                 nativeTangents[vIdx] = new float4(meshSource.tangents[vIdx].x, meshSource.tangents[vIdx].y, meshSource.tangents[vIdx].z, meshSource.tangents[vIdx].w);
-            }
+
             NativeArray<float4> nativeColors = new NativeArray<float4>(meshSource.colors.Length, Allocator.Persistent);
             for (int vIdx = 0; vIdx < meshSource.colors.Length; vIdx++)
-            {
                 nativeColors[vIdx] = new float4(meshSource.colors[vIdx].r, meshSource.colors[vIdx].g, meshSource.colors[vIdx].b, meshSource.colors[vIdx].a);
-            }
+
             NativeArray<float2> nativeUv = new NativeArray<float2>(meshSource.uv.Length, Allocator.Persistent);
             for (int vIdx = 0; vIdx < meshSource.uv.Length; vIdx++)
-            {
                 nativeUv[vIdx] = new float2(meshSource.uv[vIdx].x, meshSource.uv[vIdx].y);
-            }
-            this.nativeMeshSources[meshIdx] = new NativeMeshSource
+
+            nativeMeshSources[meshIdx] = new NativeMeshSource
             {
                 indices = nativeIndices,
                 subIndicesOffsets = nativeSubIndicesOffsets,
@@ -234,8 +227,8 @@ namespace SimplestarGame
                 colors = nativeColors,
                 uv = nativeUv,
             };
-            this.nativeMeshBounds[meshIdx] = new NativeArray<float3x2>(subMeshCount + 1, Allocator.Persistent);
-            return new CopyMeshJob(this.nativeMeshSources[meshIdx], indexData, vertexData, this.nativeMeshBounds[meshIdx]);
+            nativeMeshBounds[meshIdx] = new NativeArray<float3x2>(subMeshCount + 1, Allocator.Persistent);
+            return new CopyMeshJob(nativeMeshSources[meshIdx], indexData, vertexData, nativeMeshBounds[meshIdx]);
         }
 
         struct MeshSource

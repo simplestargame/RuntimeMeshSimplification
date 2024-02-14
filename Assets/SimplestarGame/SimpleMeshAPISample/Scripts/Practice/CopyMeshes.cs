@@ -1,16 +1,16 @@
 ﻿using System.Collections;
 using System.Linq;
+using System.Threading.Tasks;
 using Unity.Collections;
 using Unity.Jobs;
+using Unity.Jobs.LowLevel.Unsafe;
 using Unity.Mathematics;
 using UnityEngine;
 using UnityEngine.Rendering;
-using System.Threading.Tasks;
 using UnityMeshSimplifier;
-using Unity.Jobs.LowLevel.Unsafe;
 
-namespace SimplestarGame
-{ 
+namespace RuntimeMeshSimplification
+{
     public class CopyMeshes : MonoBehaviour
     {
         [SerializeField] Transform copyTarget;

@@ -5,7 +5,7 @@ using Unity.Jobs;
 using Unity.Mathematics;
 using UnityEngine;
 
-namespace SimplestarGame
+namespace RuntimeMeshSimplification
 {
     [BurstCompile]
     public struct CopyMeshJob : IJob
@@ -25,10 +25,12 @@ namespace SimplestarGame
             this.vertexData = vertexData;
             this.boundsData = boundsData;
         }
+
         half4 float3ToHalf4(float3 v)
         {
             return new half4((half)v.x, (half)v.y, (half)v.z, (half)1);
         }
+
         Color32 float3ToColor32(float3 v, byte a)
         {
             return new Color32(
@@ -38,6 +40,7 @@ namespace SimplestarGame
                 a
             );
         }
+
         Color32 float4ToColor32(float4 v)
         {
             return new Color32(
@@ -47,16 +50,18 @@ namespace SimplestarGame
                 (byte)(v.w * 127)
             );
         }
+
         half2 float2ToHalf2(float2 v)
         {
             return new half2((half)v.x, (half)v.y);
         }
+
         public void Execute()
         {
             float3x2 bounds = new float3x2();
-            var indices = this.meshSource.indices;
-            var subIndicesOffsets = this.meshSource.subIndicesOffsets;
-            var vertices = this.meshSource.vertices;
+            var indices = meshSource.indices;
+            var subIndicesOffsets = meshSource.subIndicesOffsets;
+            var vertices = meshSource.vertices;
             int subMeshCount = subIndicesOffsets.Length;
             int lastIndexOffset = 0;
             for (int subMeshIdx = 0; subMeshIdx < subMeshCount; subMeshIdx++)
@@ -66,7 +71,7 @@ namespace SimplestarGame
                 for (int idx = lastIndexOffset; idx < indexOffset; idx++)
                 {
                     int index = indices[idx];
-                    this.indexData[idx] = index;
+                    indexData[idx] = index;
                     var pos = vertices[index];
                     bound.c0 = math.min(bound.c0, pos);
                     bound.c1 = math.max(bound.c1, pos);
@@ -75,9 +80,9 @@ namespace SimplestarGame
                     bounds.c1 = math.max(bounds.c1, pos);
                 }
                 lastIndexOffset = indexOffset;
-                this.boundsData[subMeshIdx] = bound;
+                boundsData[subMeshIdx] = bound;
             }
-            this.boundsData[subMeshCount] = bounds;
+            boundsData[subMeshCount] = bounds;
             int vertexCount = vertices.Length;
             for (int vIdx = 0; vIdx < vertexCount; vIdx++)
             {

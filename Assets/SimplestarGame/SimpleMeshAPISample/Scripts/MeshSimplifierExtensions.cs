@@ -1,5 +1,5 @@
 ﻿
-using SimplestarGame;
+using RuntimeMeshSimplification;
 using UnityEngine;
 
 namespace UnityMeshSimplifier

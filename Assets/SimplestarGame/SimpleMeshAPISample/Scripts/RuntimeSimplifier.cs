@@ -6,49 +6,70 @@ using Unity.Jobs.LowLevel.Unsafe;
 using UnityEngine;
 using UnityMeshSimplifier;
 
-namespace RuntimeMeshSimplification.Sample
+namespace RuntimeMeshSimplification
 {
-    /// <summary>
-    /// Example using
-    /// </summary>
-    public class SimpleMeshAPISample : MonoBehaviour
+    public class RuntimeSimplifier
     {
-        [SerializeField] private Transform referenceTarget;
-        [SerializeField] private Vector3 offsetPosition;
-        [SerializeField, Range(0, 1)] private float quality = .5f;
-        [SerializeField] private bool recalculateNormals = true;
+        public Mesh Mesh { get; private set; }
 
-        private void MakeCustomLayoutMeshJob(Mesh.MeshDataArray meshDataArray, CustomLayoutMesh customLayoutMesh, MeshSimplifier simplifier, int meshIdx)
+        public RuntimeSimplifier(Mesh fromMesh)
         {
-            int subMeshCount = simplifier.SubMeshCount;
-            int[][] subMeshTrianglesArray = new int[subMeshCount][];
-            for (int subIdx = 0; subIdx < subMeshCount; subIdx++)
-                subMeshTrianglesArray[subIdx] = simplifier.GetSubMeshTriangles(subIdx);
-            customLayoutMesh.SetMeshData(meshDataArray, meshIdx, subMeshCount, subMeshTrianglesArray,
-                simplifier.Vertices, simplifier.Normals, simplifier.Tangents, simplifier.Colors, simplifier.UV1);
+            Mesh = fromMesh;
         }
 
-        private static int GetNearestPowerOfTwo(int value)
+        /// <summary>
+        /// Simplify one mesh
+        /// </summary>
+        /// <returns>simplified mesh</returns>
+        public async Task<Mesh> Simplify(float quality01, bool recalculateNormals = true)
         {
-            int powerOfTwo = 1;
+            // Copy
+            var customLayoutMesh = new CustomLayoutMesh(1);
+            customLayoutMesh.SetMeshData(0, Mesh);
 
-            while (powerOfTwo < value)
+            JobHandle combinedHandle = customLayoutMesh.Schedule();
+            while (!combinedHandle.IsCompleted)
+                await Task.Yield();
+            combinedHandle.Complete();
+
+            Mesh.MeshData meshData = new Mesh.MeshData();
+            meshData = customLayoutMesh.GetMeshData(0);
+
+            // Simplify
+            var meshSimplifier = new MeshSimplifier();
+            meshSimplifier.SetMeshData(meshData);
+            meshSimplifier.SimplifyMesh(quality01);
+            customLayoutMesh.Dispose();
+
+            customLayoutMesh.Allocate(1);
+            var newMeshDataArray = Mesh.AllocateWritableMeshData(1);
+            MakeCustomLayoutMeshJob(newMeshDataArray, customLayoutMesh, meshSimplifier, 0);
+
+            combinedHandle = customLayoutMesh.Schedule();
+            while (!combinedHandle.IsCompleted)
+                await Task.Yield();
+            combinedHandle.Complete();
+
+            Mesh = customLayoutMesh.ToMesh(0);
+            customLayoutMesh.Dispose();
+
+            int meshId = Mesh.GetInstanceID();
+            Physics.BakeMesh(meshId, false);
+
+            if (recalculateNormals)
             {
-                powerOfTwo *= 2;
+                Mesh.RecalculateNormals();
+                Mesh.RecalculateTangents();
             }
 
-            int lowerPowerOfTwo = powerOfTwo / 2;
-            int upperPowerOfTwo = powerOfTwo;
-
-            return (upperPowerOfTwo - value) < (value - lowerPowerOfTwo) ? upperPowerOfTwo : lowerPowerOfTwo;
+            return Mesh;
         }
 
-        private void Start()
-        {
-            _ = Simplify();
-        }
-
-        private async Task Simplify()
+        /// <summary>
+        /// Simplify complex mesh to new GameObject
+        /// </summary>
+        /// <returns>New GameObject with simplified meshes</returns>
+        public static async Task<GameObject> Simplify(GameObject referenceTarget, float quality01, bool recalculateNormals = true)
         {
             MeshFilter[] meshFilters = referenceTarget.GetComponentsInChildren<MeshFilter>(true);
             await Task.Yield();
@@ -83,7 +104,7 @@ namespace RuntimeMeshSimplification.Sample
                 var meshSimplifier = new MeshSimplifier();
                 var meshData = meshDataArray[meshIdx];
                 meshSimplifier.SetMeshData(meshData);
-                meshSimplifier.SimplifyMesh(quality);
+                meshSimplifier.SimplifyMesh(quality01);
                 meshSimplifiers[meshIdx] = meshSimplifier;
             }
             customLayoutMesh.Dispose();
@@ -125,13 +146,15 @@ namespace RuntimeMeshSimplification.Sample
             bakeMeshJobHandle.Complete();
             meshIds.Dispose();
 
+            GameObject newParent = new GameObject(referenceTarget.name + quality01);
+
             for (int i = 0; i < newMeshes.Length; i++)
             {
                 await Task.Yield();
                 var newMesh = newMeshes[i];
                 var sourceMeshFilter = meshFilters[i];
                 GameObject newGameObject = new GameObject("ClonedMeshObject");
-                newGameObject.transform.position = sourceMeshFilter.transform.position + offsetPosition;
+                newGameObject.transform.position = sourceMeshFilter.transform.position;
                 newGameObject.transform.rotation = sourceMeshFilter.transform.rotation;
                 if (recalculateNormals)
                 {
@@ -141,7 +164,36 @@ namespace RuntimeMeshSimplification.Sample
                 newGameObject.AddComponent<MeshFilter>().sharedMesh = newMesh;
                 newGameObject.AddComponent<MeshRenderer>().sharedMaterials = sourceMeshFilter.GetComponent<MeshRenderer>().sharedMaterials;
                 newGameObject.AddComponent<MeshCollider>().sharedMesh = newMesh;
+
+                newGameObject.transform.SetParent(newParent.transform);
             }
+
+            return newParent;
+        }
+
+        private static void MakeCustomLayoutMeshJob(Mesh.MeshDataArray meshDataArray, CustomLayoutMesh customLayoutMesh, MeshSimplifier simplifier, int meshIdx)
+        {
+            int subMeshCount = simplifier.SubMeshCount;
+            int[][] subMeshTrianglesArray = new int[subMeshCount][];
+            for (int subIdx = 0; subIdx < subMeshCount; subIdx++)
+                subMeshTrianglesArray[subIdx] = simplifier.GetSubMeshTriangles(subIdx);
+            customLayoutMesh.SetMeshData(meshDataArray, meshIdx, subMeshCount, subMeshTrianglesArray,
+                simplifier.Vertices, simplifier.Normals, simplifier.Tangents, simplifier.Colors, simplifier.UV1);
+        }
+
+        private static int GetNearestPowerOfTwo(int value)
+        {
+            int powerOfTwo = 1;
+
+            while (powerOfTwo < value)
+            {
+                powerOfTwo *= 2;
+            }
+
+            int lowerPowerOfTwo = powerOfTwo / 2;
+            int upperPowerOfTwo = powerOfTwo;
+
+            return (upperPowerOfTwo - value) < (value - lowerPowerOfTwo) ? upperPowerOfTwo : lowerPowerOfTwo;
         }
     }
 }

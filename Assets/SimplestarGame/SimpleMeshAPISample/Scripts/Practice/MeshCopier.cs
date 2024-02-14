@@ -3,7 +3,7 @@ using Unity.Mathematics;
 using UnityEngine;
 using UnityEngine.Rendering;
 
-namespace SimplestarGame
+namespace RuntimeMeshSimplification
 {
     public class MeshCopier : MonoBehaviour
     {
